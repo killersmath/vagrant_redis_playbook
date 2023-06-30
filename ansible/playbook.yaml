@@ -1,0 +1,71 @@
+- name: Install Redis
+  hosts: virtualmachines
+  vars_files:
+    vars.yml
+  become: true
+  tasks:
+    - name: install redis deps
+      yum: name={{item}} state=present
+      with_items:
+      - make
+      - gcc
+      - wget
+      tags: redis
+
+    - name: download redis source
+      shell: wget -O - http://download.redis.io/releases/redis-{{redis_version}}.tar.gz | tar -xz -C /tmp creates=/tmp/redis-{{redis_version}}
+      tags: redis
+
+    - name: install redis
+      shell: make chdir=/tmp/redis-{{redis_version}} creates=/tmp/redis-{{redis_version}}/src/redis-server
+      tags: redis
+
+    - name: move compiled redis binaries
+      shell: cp -f {{item}} /usr/local/bin chdir=/tmp/redis-{{redis_version}}/src
+      with_items:
+        - redis-cli
+        - redis-server
+        - redis-benchmark
+        - redis-sentinel
+        - redis-check-aof
+        - redis-check-rdb
+      tags: redis
+
+    - name: create redis group
+      group: name=redis state=present system=yes
+    
+    - name: create redis user
+      user: name=redis group=redis createhome=no shell=/bin/false system=yes state=present
+
+    - name: make sure that /etc/redis exists
+      file: path=/etc/redis state=directory mode=0755
+
+    - name: make sure that /var/db/redis exists
+      file: path=/var/db/redis state=directory mode=0755 group=redis owner=redis
+
+    - name: make sure redis.log file exists
+      copy: src=templates/redis.log dest=/var/log/redis.log owner=redis group=redis mode=0644
+    
+    - name: copy custom template
+      template: src=templates/redis.local.conf.j2 dest=/etc/redis/redis.local.conf group=redis owner=redis
+
+    - name: copy redis-local script
+      template: src=templates/redis-local.j2 dest=/usr/local/bin/redis-local mode=0755
+
+    - name: copy redis.conf file
+      copy: src=templates/redis.conf dest=/etc/redis/redis.conf group=redis owner=redis
+      # notify:
+        # - restart redis
+      tags: redis
+
+    - name: make redis a service
+      template: src=redis_init_script.j2 dest=/etc/init.d/redis mode=755
+      tags: redis
+
+    - name: run redis
+      shell: /etc/init.d/redis start creates=/var/run/redis.pid
+      tags: redis
+  handlers:
+    - name: restart redis
+      shell: /etc/init.d/redis stop && /etc/init.d/redis start
+ 

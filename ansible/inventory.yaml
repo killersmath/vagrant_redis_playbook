@@ -1,0 +1,7 @@
+virtualmachines:
+  hosts:
+    vm01:
+      ansible_host: 192.168.33.50
+  vars:
+    ansible_user: vagrant
+    # ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o ProxyCommand="ssh -W %h:%p vagrant@192.168.33.10"'
